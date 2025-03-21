@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"traveler_agent/controllers"
 	"traveler_agent/models"
 	"traveler_agent/routers"
 	"traveler_agent/utils"
@@ -52,6 +53,13 @@ func main() {
 		utils.Log.Info("Redis连接成功")
 		defer utils.CloseRedis()
 	}
+
+	// 初始化所有控制器
+	controllers.InitAuthController()
+	controllers.InitUserController()
+	controllers.InitAttractionController()
+	controllers.InitItineraryController()
+	utils.Log.Info("所有控制器初始化完成")
 
 	// 设置路由
 	r := routers.SetupRouter()

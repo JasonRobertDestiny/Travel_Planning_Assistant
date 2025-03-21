@@ -7,10 +7,296 @@ import (
 
 	"traveler_agent/middlewares"
 	"traveler_agent/models"
+	"traveler_agent/repositories"
 	"traveler_agent/services"
 
 	"github.com/gin-gonic/gin"
 )
+
+// 全局行程服务
+var (
+	itineraryService services.ItineraryService
+)
+
+// 初始化行程服务
+func InitItineraryController() {
+	itineraryRepository := repositories.NewItineraryRepository(models.DB)
+	itineraryService = services.NewItineraryService(itineraryRepository)
+}
+
+// ListPublicItineraries 获取公开行程列表
+func ListPublicItineraries(c *gin.Context) {
+	// 解析查询参数
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// 获取公开行程
+	itineraries, err := itineraryService.GetPublicItineraries(page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	// 假设我们获取总数为结果的长度（实际应该从服务层返回）
+	total := len(itineraries)
+
+	// 计算总页数
+	totalPages := (total + limit - 1) / limit
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   itineraries,
+		"meta": gin.H{
+			"total": total,
+			"page":  page,
+			"limit": limit,
+			"pages": totalPages,
+		},
+	})
+}
+
+// CreateItinerary 创建行程
+func CreateItinerary(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := middlewares.GetUserID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": "error",
+			"error":  "未授权访问",
+		})
+		return
+	}
+
+	var request models.CreateItineraryRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "无效的请求数据",
+		})
+		return
+	}
+
+	// 创建行程
+	itinerary, err := itineraryService.CreateItinerary(userID, &request)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"status":  "success",
+		"message": "行程创建成功",
+		"data":    itinerary,
+	})
+}
+
+// ListUserItineraries 获取用户行程列表
+func ListUserItineraries(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := middlewares.GetUserID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": "error",
+			"error":  "未授权访问",
+		})
+		return
+	}
+
+	// 解析查询参数
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// 获取用户行程
+	itineraries, err := itineraryService.GetUserItineraries(userID, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	// 假设我们获取总数为结果的长度（实际应该从服务层返回）
+	total := len(itineraries)
+
+	// 计算总页数
+	totalPages := (total + limit - 1) / limit
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   itineraries,
+		"meta": gin.H{
+			"total": total,
+			"page":  page,
+			"limit": limit,
+			"pages": totalPages,
+		},
+	})
+}
+
+// GetItinerary 获取行程详情
+func GetItinerary(c *gin.Context) {
+	// 解析路径参数
+	itineraryID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "无效的行程ID",
+		})
+		return
+	}
+
+	// 获取行程详情
+	itinerary, err := itineraryService.GetItineraryByID(itineraryID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"status": "error",
+			"error":  "行程不存在或无权访问",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   itinerary,
+	})
+}
+
+// UpdateItinerary 更新行程
+func UpdateItinerary(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := middlewares.GetUserID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": "error",
+			"error":  "未授权访问",
+		})
+		return
+	}
+
+	// 解析路径参数
+	itineraryID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "无效的行程ID",
+		})
+		return
+	}
+
+	var request models.CreateItineraryRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "无效的请求数据",
+		})
+		return
+	}
+
+	// 更新行程
+	itinerary, err := itineraryService.UpdateItinerary(itineraryID, userID, &request)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "行程更新成功",
+		"data":    itinerary,
+	})
+}
+
+// DeleteItinerary 删除行程
+func DeleteItinerary(c *gin.Context) {
+	// 获取用户ID
+	userID, exists := middlewares.GetUserID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": "error",
+			"error":  "未授权访问",
+		})
+		return
+	}
+
+	// 解析路径参数
+	itineraryID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "无效的行程ID",
+		})
+		return
+	}
+
+	// 删除行程
+	err = itineraryService.DeleteItinerary(itineraryID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "行程删除成功",
+	})
+}
+
+// AddItineraryItem 添加行程项目
+func AddItineraryItem(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"status": "error",
+		"error":  "添加行程项目功能尚未实现",
+	})
+}
+
+// UpdateItineraryItem 更新行程项目
+func UpdateItineraryItem(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"status": "error",
+		"error":  "更新行程项目功能尚未实现",
+	})
+}
+
+// DeleteItineraryItem 删除行程项目
+func DeleteItineraryItem(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"status": "error",
+		"error":  "删除行程项目功能尚未实现",
+	})
+}
 
 // ItineraryController 行程控制器
 type ItineraryController struct {

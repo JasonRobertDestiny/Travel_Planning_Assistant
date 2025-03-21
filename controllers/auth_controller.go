@@ -5,10 +5,22 @@ import (
 
 	"traveler_agent/middlewares"
 	"traveler_agent/models"
+	"traveler_agent/repositories"
 	"traveler_agent/services"
 
 	"github.com/gin-gonic/gin"
 )
+
+// 全局认证服务 - 供路由使用
+var (
+	authService services.AuthService
+)
+
+// InitAuthController 初始化认证控制器
+func InitAuthController() {
+	userRepo := repositories.NewUserRepository(models.DB)
+	authService = services.NewAuthService(userRepo)
+}
 
 // AuthController 认证控制器
 type AuthController struct {
@@ -22,64 +34,63 @@ func NewAuthController(authService services.AuthService) *AuthController {
 	}
 }
 
-// Register 注册
 // Register 用户注册
-func (c *AuthController) Register(ctx *gin.Context) {
-	var request models.CreateUserRequest
-
-	// 绑定JSON请求
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
+func Register(c *gin.Context) {
+	var req models.CreateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "无效的请求数据",
+		})
 		return
 	}
 
-	// 验证请求数据
-	if request.Username == "" || request.Email == "" || request.Password == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "用户名、邮箱和密码必须提供"})
-		return
-	}
-
-	// 调用服务层处理注册
-	user, token, err := c.authService.Register(ctx, &request)
+	// 注册新用户
+	user, token, err := authService.Register(c, &req)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
 		return
 	}
 
-	// 返回用户信息和令牌
-	ctx.JSON(http.StatusCreated, gin.H{
-		"user":  user,
-		"token": token,
+	c.JSON(http.StatusCreated, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"user":  user,
+			"token": token,
+		},
 	})
 }
 
 // Login 用户登录
-func (c *AuthController) Login(ctx *gin.Context) {
-	var request models.LoginRequest
-
-	// 绑定JSON请求
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
+func Login(c *gin.Context) {
+	var req models.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  "无效的登录信息",
+		})
 		return
 	}
 
-	// 验证请求数据
-	if request.Email == "" || request.Password == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "邮箱和密码必须提供"})
-		return
-	}
-
-	// 调用服务层处理登录
-	user, token, err := c.authService.Login(ctx, request.Email, request.Password)
+	// 处理登录请求
+	user, token, err := authService.Login(c, req.Email, req.Password)
 	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": "error",
+			"error":  err.Error(),
+		})
 		return
 	}
 
-	// 返回用户信息和令牌
-	ctx.JSON(http.StatusOK, gin.H{
-		"user":  user,
-		"token": token,
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"user":  user,
+			"token": token,
+		},
 	})
 }
 
@@ -106,8 +117,8 @@ func (c *AuthController) GetProfile(ctx *gin.Context) {
 func (c *AuthController) RegisterRoutes(router *gin.RouterGroup) {
 	auth := router.Group("/auth")
 	{
-		auth.POST("/register", c.Register)
-		auth.POST("/login", c.Login)
+		auth.POST("/register", Register)
+		auth.POST("/login", Login)
 	}
 
 	profile := router.Group("/profile")

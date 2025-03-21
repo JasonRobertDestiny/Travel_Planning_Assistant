@@ -32,8 +32,22 @@ type Config struct {
 	RedisDB       int    `json:"redis_db"`
 
 	// 日志配置
-	LogLevel  string `json:"log_level"`
-	LogOutput string `json:"log_output"`
+	Logging struct {
+		Level    string `json:"level"`     // 日志级别: debug, info, warn, error
+		Format   string `json:"format"`    // 日志格式: text, json
+		Output   string `json:"output"`    // 日志输出: console, file, console,file
+		FilePath string `json:"file_path"` // 日志文件路径
+	} `json:"logging"`
+
+	// CORS配置
+	CORS struct {
+		AllowedOrigins   []string `json:"allowed_origins"`
+		AllowedMethods   []string `json:"allowed_methods"`
+		AllowedHeaders   []string `json:"allowed_headers"`
+		ExposeHeaders    []string `json:"expose_headers"`
+		AllowCredentials bool     `json:"allow_credentials"`
+		MaxAge           int      `json:"max_age"`
+	} `json:"cors"`
 }
 
 var cfg Config
@@ -81,8 +95,21 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// 日志配置
-	cfg.LogLevel = getEnv("LOG_LEVEL", "info")
-	cfg.LogOutput = getEnv("LOG_OUTPUT", "console")
+	cfg.Logging.Level = getEnv("LOG_LEVEL", "info")
+	cfg.Logging.Format = getEnv("LOG_FORMAT", "text")
+	cfg.Logging.Output = getEnv("LOG_OUTPUT", "console")
+	cfg.Logging.FilePath = getEnv("LOG_FILE_PATH", "./logs/traveler_agent.log")
+
+	// CORS配置
+	cfg.CORS.AllowedOrigins = strings.Split(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"), ",")
+	cfg.CORS.AllowedMethods = strings.Split(getEnv("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS"), ",")
+	cfg.CORS.AllowedHeaders = strings.Split(getEnv("CORS_ALLOWED_HEADERS", "Origin,Content-Type,Accept,Authorization"), ",")
+	cfg.CORS.ExposeHeaders = strings.Split(getEnv("CORS_EXPOSE_HEADERS", "Content-Length"), ",")
+	cfg.CORS.AllowCredentials = getEnv("CORS_ALLOW_CREDENTIALS", "true") == "true"
+	cfg.CORS.MaxAge, err = strconv.Atoi(getEnv("CORS_MAX_AGE", "86400"))
+	if err != nil {
+		cfg.CORS.MaxAge = 86400
+	}
 
 	return &cfg, nil
 }
